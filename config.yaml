@@ -1,0 +1,71 @@
+# HuggingFace Paper Collector Configuration
+# Tailored for: "Who Do You Think I Am?" — Implicit Personification in LLMs
+
+huggingface:
+  collection_slug: "${HF_COLLECTION_SLUG}"
+
+semantic_scholar:
+  api_key: "${S2_API_KEY}"
+
+# ──────────────────────────────────────────────
+# Citation tracking
+# All papers that cite these will be auto-added
+# (no date filter — we want the full citation graph)
+# ──────────────────────────────────────────────
+track_citations:
+  - id: "ARXIV:2505.16467"   # Reading Between the Prompts
+    note: "Reading Between the Prompts"
+    max_results: 500
+
+# ──────────────────────────────────────────────
+# Keyword-based discovery
+# NARROW: only the intersection of
+#   interpretability / mech interp  ×  implicit personalization / user persona
+# ──────────────────────────────────────────────
+keyword_searches:
+  - query: "implicit personalization interpretability language models"
+    max_results: 20
+  - query: "LLM user persona representation mechanistic interpretability"
+    max_results: 15
+  - query: "latent user attributes probing LLM activations"
+    max_results: 15
+  - query: "steering vectors user persona demographic bias LLM"
+    max_results: 15
+  - query: "linear probes demographic inference language model residual stream"
+    max_results: 10
+
+# ──────────────────────────────────────────────
+# Similar paper discovery (seeds from proposal)
+# ──────────────────────────────────────────────
+seed_papers:
+  # Core: implicit personalization
+  - id: "ARXIV:2405.14808"   # Implicit Personalization in LMs (Jin et al., EMNLP 2024)
+    note: "seed: implicit personalization systematic study"
+  - id: "ARXIV:2505.16467"   # Reading Between the Prompts
+    note: "seed: stereotypes in implicit personalization"
+  - id: "ARXIV:2405.01768"   # CoS: Context Steering
+    note: "seed: context steering personalization"
+
+  # Methods: steering & erasure
+  - id: "ARXIV:2312.06681"   # CAA (Rimsky et al.)
+    note: "seed: contrastive activation addition"
+  - id: "ARXIV:2308.10248"   # ActAdd (Turner et al.)
+    note: "seed: activation addition steering"
+  - id: "ARXIV:2306.03819"   # LEACE (Belrose et al.)
+    note: "seed: linear concept erasure"
+
+  # Methods: sparse autoencoders
+  - id: "ARXIV:2309.16042"   # Towards Monosemanticity
+    note: "seed: SAE features"
+  - id: "ARXIV:2404.14082"   # Scaling Monosemanticity
+    note: "seed: scaled SAE"
+
+# ──────────────────────────────────────────────
+# Filters
+# ──────────────────────────────────────────────
+filters:
+  max_age_days: 60
+  min_citations: 0
+  require_open_access: false
+  fields_of_study:
+    - "Computer Science"

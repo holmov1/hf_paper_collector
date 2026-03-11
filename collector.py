@@ -26,7 +26,8 @@ S2_REC_BASE = "https://api.semanticscholar.org/recommendations/v1/papers"
 S2_FIELDS = "externalIds,title,abstract,year,citationCount,publicationDate,openAccessPdf,fieldsOfStudy"
 
 # Rate limiting
-REQUEST_DELAY = 1.0  # seconds between requests (respect S2 limits)
+REQUEST_DELAY = 1.5  # seconds between requests (respect S2 limits)
+MAX_RETRIES = 3
 
 
 class SemanticScholarClient:
@@ -38,14 +39,24 @@ class SemanticScholarClient:
             self.session.headers["x-api-key"] = api_key
 
     def _get(self, url: str, params: dict | None = None) -> dict | None:
-        time.sleep(REQUEST_DELAY)
-        try:
-            resp = self.session.get(url, params=params, timeout=30)
-            resp.raise_for_status()
-            return resp.json()
-        except requests.RequestException as e:
-            log.warning(f"S2 API error: {e}")
-            return None
+        for attempt in range(MAX_RETRIES):
+            time.sleep(REQUEST_DELAY)
+            try:
+                resp = self.session.get(url, params=params, timeout=30)
+                if resp.status_code == 429:
+                    wait = REQUEST_DELAY * (2 ** attempt)
+                    log.warning(f"Rate limited (429), retrying in {wait:.0f}s...")
+                    time.sleep(wait)
+                    continue
+                resp.raise_for_status()
+                return resp.json()
+            except requests.RequestException as e:
+                if attempt < MAX_RETRIES - 1:
+                    log.warning(f"S2 API error: {e}, retrying...")
+                    continue
+                log.warning(f"S2 API error after {MAX_RETRIES} attempts: {e}")
+                return None
+        return None
 
     def search(self, query: str, limit: int = 20, year: str | None = None) -> list[dict]:
         """Search for papers by keyword query."""
@@ -59,20 +70,29 @@ class SemanticScholarClient:
 
     def get_recommendations(self, paper_ids: list[str], limit: int = 20) -> list[dict]:
         """Get recommended papers based on seed paper IDs."""
-        # S2 recommendations endpoint uses POST with positivePaperIds
-        time.sleep(REQUEST_DELAY)
         payload = {"positivePaperIds": paper_ids}
         params = {"limit": min(limit, 100), "fields": S2_FIELDS}
-        try:
-            resp = self.session.post(
-                S2_REC_BASE, json=payload, params=params, timeout=30
-            )
-            resp.raise_for_status()
-            data = resp.json()
-            return data.get("recommendedPapers", [])
-        except requests.RequestException as e:
-            log.warning(f"S2 recommendations error: {e}")
-            return []
+        for attempt in range(MAX_RETRIES):
+            time.sleep(REQUEST_DELAY)
+            try:
+                resp = self.session.post(
+                    S2_REC_BASE, json=payload, params=params, timeout=30
+                )
+                if resp.status_code == 429:
+                    wait = REQUEST_DELAY * (2 ** attempt)
+                    log.warning(f"Rate limited (429), retrying in {wait:.0f}s...")
+                    time.sleep(wait)
+                    continue
+                resp.raise_for_status()
+                data = resp.json()
+                return data.get("recommendedPapers", [])
+            except requests.RequestException as e:
+                if attempt < MAX_RETRIES - 1:
+                    log.warning(f"S2 recommendations error: {e}, retrying...")
+                    continue
+                log.warning(f"S2 recommendations error after {MAX_RETRIES} attempts: {e}")
+                return []
+        return []
 
     def get_citations(self, paper_id: str, limit: int = 100) -> list[dict]:
         """Get papers that cite a given paper."""
@@ -151,9 +171,13 @@ def passes_filters(paper: dict, filters: dict, cutoff_date: datetime | None) -> 
     # Check fields of study
     allowed_fields = filters.get("fields_of_study", [])
     if allowed_fields:
-        paper_fields = {
-            f.get("category", "") for f in (paper.get("fieldsOfStudy") or [])
-        }
+        raw_fields = paper.get("fieldsOfStudy") or []
+        paper_fields = set()
+        for f in raw_fields:
+            if isinstance(f, str):
+                paper_fields.add(f)
+            elif isinstance(f, dict):
+                paper_fields.add(f.get("category", ""))
         if not paper_fields.intersection(set(allowed_fields)):
             return False
 
